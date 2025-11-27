@@ -203,7 +203,7 @@ app.get("/api/recipes", async (req, res) => {
     let ref = db.collection("recipes").orderBy("createdAt", "desc").limit(Number(limit));
 
     if (category) {
-      ref = db.collection("recipes").where("category", "==", category).orderBy("createdAt", "desc");
+      ref = ref.where("category", "==", category);
     }
     if (difficulty) {
       ref = ref.where("difficulty", "==", difficulty);
@@ -248,6 +248,7 @@ app.post("/api/recipes", authMiddleware, async (req, res) => {
   try {
     const data = {
       ...req.body,
+      category: req.body.category || req.body.categorySlug || null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       authorId: req.user?.uid || null,
@@ -496,6 +497,17 @@ app.get("/api/recipes/:id/comments", async (req, res) => {
       .get();
 
     const comments = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Attach author info
+    const userIds = comments.map(c => c.userId).filter(Boolean);
+    const users = await fetchUsersByIds(userIds);
+
+    const withAuthor = comments.map((comment) => ({
+      ...comment,
+      author: users[comment.userId] || {
+        username: "Utilisateur inconnu",
+        avatar: "",
+      }
+    }));
     res.json({ success: true, data: comments });
 
   } catch (error) {

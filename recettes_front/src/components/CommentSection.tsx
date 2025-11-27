@@ -195,7 +195,17 @@ const handleSubmitReply = async (commentId: string) => {
                   </Avatar>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold">{comment.user?.username}</p>
+                      <p className="font-semibold"> 
+                        {comment.createdAt?.toDate
+                              ? comment.createdAt.toDate().toLocaleDateString("fr-FR", {
+                               year: "numeric",
+                               month: "long",
+                               day: "numeric",
+                               hour: "2-digit",
+                               minute: "2-digit",
+                              })
+                       : "Date inconnue"}
+                       </p>
                       {comment.rating && (
                         <div className="flex items-center gap-1">
                           <Star className="h-3 w-3 text-accent fill-accent" />
@@ -203,7 +213,9 @@ const handleSubmitReply = async (commentId: string) => {
                         </div>
                       )}
                       <span className="text-xs text-muted-foreground">
-                        {new Date(comment.createdAt).toLocaleDateString("fr-FR")}
+                        {comment.createdAt?.toDate
+  ? comment.createdAt.toDate().toLocaleDateString("fr-FR")
+  : "Date inconnue"}
                       </span>
                     </div>
                     <p className="text-sm mb-2">{comment.content}</p>
@@ -280,7 +292,9 @@ const handleSubmitReply = async (commentId: string) => {
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="font-semibold text-sm">{reply.user?.username}</p>
                                 <span className="text-xs text-muted-foreground">
-                                  {new Date(reply.createdAt).toLocaleDateString("fr-FR")}
+                                  {reply.createdAt?.toDate
+  ? reply.createdAt.toDate().toLocaleDateString("fr-FR")
+  : "Date inconnue"}
                                 </span>
                               </div>
                               <p className="text-sm">{reply.content}</p>

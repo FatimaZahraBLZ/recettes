@@ -29,8 +29,14 @@ const Search = () => {
   }, []);
 
   useEffect(() => {
-    performSearch();
-  }, [searchParams]);
+  performSearch();
+}, [searchParams]);
+
+useEffect(() => {
+  setSelectedCategory(searchParams.get("category") || "");
+  setSelectedDifficulty(searchParams.get("difficulty") || "");
+}, [searchParams]);
+
 
   const loadCategories = async () => {
     try {

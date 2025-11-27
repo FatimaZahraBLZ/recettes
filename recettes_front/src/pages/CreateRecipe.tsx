@@ -313,7 +313,7 @@ const CreateRecipe = () => {
           title: "Succès",
           description: "Recette créée avec succès!",
         });
-        navigate(`/recipe/${data.data._id || data.data.id}`);
+        navigate(`/recipe/${data.id}`);
       }
     } catch (error: any) {
       console.error("Error creating recipe:", error);
