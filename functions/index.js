@@ -200,22 +200,157 @@ app.get("/api/recipes/user/:userId", async (req, res) => {
 app.get("/api/recipes", async (req, res) => {
   try {
     const { category, difficulty, search, limit = 50 } = req.query;
-    let ref = db.collection("recipes").orderBy("createdAt", "desc").limit(Number(limit));
+    const limitNum = Number(limit);
+    const baseRef = db.collection("recipes");
+    const queryRefs = [];
+    const stringCandidates = new Set();
+    const refCandidates = new Set();
 
+   
     if (category) {
-      ref = ref.where("category", "==", category);
-    }
-    if (difficulty) {
-      ref = ref.where("difficulty", "==", difficulty);
+      const catParam = String(category).trim();
+      const slugParam = catParam.toLowerCase();
+      stringCandidates.add(catParam);
+      stringCandidates.add(slugParam);
+
+    
+      const categoryDoc = await db.collection("categories").doc(catParam).get();
+      if (categoryDoc.exists) {
+        stringCandidates.add(categoryDoc.id);
+        refCandidates.add(categoryDoc.ref);
+        const data = categoryDoc.data();
+        if (data?.slug) {
+          stringCandidates.add(String(data.slug));
+          stringCandidates.add(String(data.slug).toLowerCase());
+        }
+        if (data?.name) {
+          stringCandidates.add(String(data.name));
+          stringCandidates.add(String(data.name).toLowerCase());
+        }
+      }
+
+
+      const slugSnap = await db
+        .collection("categories")
+        .where("slug", "==", slugParam)
+        .limit(1)
+        .get();
+      if (!slugSnap.empty) {
+        stringCandidates.add(slugSnap.docs[0].id);
+        refCandidates.add(slugSnap.docs[0].ref);
+        const data = slugSnap.docs[0].data();
+        if (data?.slug) {
+          stringCandidates.add(String(data.slug));
+          stringCandidates.add(String(data.slug).toLowerCase());
+        }
+        if (data?.name) {
+          stringCandidates.add(String(data.name));
+          stringCandidates.add(String(data.name).toLowerCase());
+        }
+      } else {
+
+        const allCats = await db.collection("categories").limit(200).get();
+        allCats.docs.forEach((doc) => {
+          const data = doc.data();
+          const slug = (data?.slug || "").toString();
+          const name = (data?.name || "").toString();
+          if (slug.toLowerCase() === slugParam || name.toLowerCase() === slugParam) {
+            stringCandidates.add(doc.id);
+            refCandidates.add(doc.ref);
+            if (slug) {
+              stringCandidates.add(slug);
+              stringCandidates.add(slug.toLowerCase());
+            }
+            if (name) {
+              stringCandidates.add(name);
+              stringCandidates.add(name.toLowerCase());
+            }
+          }
+        });
+      }
     }
 
-    const snapshot = await ref.get();
-    let data = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    // Helper to build a query on a specific field for a given set of values (strings or refs)
+    const buildQuery = (field, values) => {
+      let q = baseRef;
+      if (category && values?.length) {
+        q = values.length > 1
+          ? q.where(field, "in", values.slice(0, 10)) // Firestore "in" max 10 values
+          : q.where(field, "==", values[0]);
+      }
+      if (difficulty) {
+        q = q.where("difficulty", "==", difficulty);
+      }
+      return q.orderBy("createdAt", "desc").limit(limitNum);
+    };
+
+    // Query on both possible fields (category id or stored slug/name), plus legacy field categorySlug
+    if (category) {
+      const stringVals = Array.from(stringCandidates);
+      const refVals = Array.from(refCandidates);
+      const primaryString = buildQuery("category", stringVals);
+      if (primaryString) queryRefs.push(primaryString);
+      const primaryRef = refVals.length ? buildQuery("category", refVals) : null;
+      if (primaryRef) queryRefs.push(primaryRef);
+      const slugString = buildQuery("categorySlug", stringVals);
+      if (slugString) queryRefs.push(slugString);
+    }
+
+    // If no category filter, just run one query
+    if (!category) {
+      queryRefs.push(buildQuery("category", []));
+    }
+
+    const snapshots = await Promise.all(queryRefs.filter(Boolean).map((q) => q.get()));
+    const merged = new Map();
+    snapshots.forEach((snap) => {
+      snap.docs.forEach((doc) => merged.set(doc.id, { id: doc.id, ...doc.data() }));
+    });
+
+    let data = Array.from(merged.values());
+
+    // Fallback: if nothing matched and a category was provided, fetch a larger page and filter in-memory
+    if (!data.length && category) {
+      const fallbackSnap = await baseRef.orderBy("createdAt", "desc").limit(Math.max(limitNum, 200)).get();
+      const catParam = String(category).trim();
+      const slugParam = catParam.toLowerCase();
+      const matchers = new Set([catParam, slugParam, ...stringCandidates]);
+
+      const fallback = fallbackSnap.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .filter((r) => {
+          const values = [
+            r.category,
+            r.categorySlug,
+            r.categoryName,
+            r.category_id,
+            r.categoryId,
+            r.category?.id,
+            r.category?.slug,
+            r.category?.name,
+          ]
+            .filter(Boolean)
+            .map((v) => String(v).toLowerCase());
+          return values.some((v) => matchers.has(v));
+        });
+
+      fallback.forEach((r) => merged.set(r.id, r));
+      data = Array.from(merged.values());
+    }
 
     if (search) {
       const lower = search.toLowerCase();
       data = data.filter((r) => (r.title || "").toLowerCase().includes(lower));
     }
+
+    // Sort after merge to ensure correct ordering when multiple queries are combined
+    data = data
+      .sort((a, b) => {
+        const aTs = a.createdAt?.toMillis ? a.createdAt.toMillis() : new Date(a.createdAt || 0).getTime();
+        const bTs = b.createdAt?.toMillis ? b.createdAt.toMillis() : new Date(b.createdAt || 0).getTime();
+        return bTs - aTs;
+      })
+      .slice(0, limitNum);
 
     const withAuthor = await attachAuthor(data);
     res.json({ success: true, data: withAuthor });
