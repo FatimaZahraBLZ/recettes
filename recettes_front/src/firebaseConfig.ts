@@ -1,25 +1,22 @@
-// Import the functions you need from the SDKs you need
+// firebase.ts (frontend)
+
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getStorage } from "firebase/storage";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// FRONTEND MUST USE ENV VARIABLES, NOT firebase.functions()
 const firebaseConfig = {
-  apiKey: "AIzaSyAGgpzSZ0mdb2KRFmsByXOmsPlnDm6_BxY",
-  authDomain: "recettescloud.firebaseapp.com",
-  projectId: "recettescloud",
-  storageBucket: "recettescloud.firebasestorage.app",
-  messagingSenderId: "608657587998",
-  appId: "1:608657587998:web:efdf2ab9fb615d5db7130f",
-  measurementId: "G-TNYPYXE9G4"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
+
 // Initialize Firebase
 export const app = initializeApp(firebaseConfig);
-// Export Firestore + Auth + Storage for use everywhere
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
